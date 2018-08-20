@@ -22,7 +22,9 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 
 #include "tutorabledialog.h"
 #include <iplugin.h>
+#include <QComboBox>
 #include <QDialog>
+#include <QWebSocket>
 #include <QListWidgetItem>
 
 class PluginContainer;
@@ -51,6 +53,8 @@ public slots:
 signals:
 
   void resetDialogs();
+  void processApiKey(const QString &);
+  void closeApiConnection(QPushButton *);
 
 private:
 
@@ -85,9 +89,18 @@ private slots:
 
   void on_browseProfilesDirBtn_clicked();
 
+  void on_nexusConnect_clicked();
+
+  void dispatchLogin();
+
+  void receiveApiKey(const QString &apiKey);
+
+  void completeApiConnection();
+
 private:
     Ui::SettingsDialog *ui;
     PluginContainer *m_PluginContainer;
+    QWebSocket *m_nexusLogin;
 };
 
 

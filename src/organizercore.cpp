@@ -283,7 +283,6 @@ OrganizerCore::OrganizerCore(const QSettings &initSettings)
   , m_DownloadManager(NexusInterface::instance(m_PluginContainer), this)
   , m_InstallationManager()
   , m_RefresherThread()
-  , m_AskForNexusPW(false)
   , m_DirectoryUpdate(false)
   , m_ArchivesInit(false)
   , m_PluginListsWriter(std::bind(&OrganizerCore::savePluginList, this))
@@ -327,8 +326,6 @@ OrganizerCore::OrganizerCore(const QSettings &initSettings)
   // make directory refresher run in a separate thread
   m_RefresherThread.start();
   m_DirectoryRefresher.moveToThread(&m_RefresherThread);
-
-  m_AskForNexusPW = initSettings.value("ask_for_nexuspw", true).toBool();
 }
 
 OrganizerCore::~OrganizerCore()
@@ -373,7 +370,6 @@ QSettings::Status OrganizerCore::storeSettings(const QString &fileName)
     settings.setValue("selected_profile",
                       m_CurrentProfile->name().toUtf8().constData());
   }
-  settings.setValue("ask_for_nexuspw", m_AskForNexusPW);
 
   settings.remove("customExecutables");
   settings.beginWriteArray("customExecutables");
@@ -622,53 +618,33 @@ Settings &OrganizerCore::settings()
   return m_Settings;
 }
 
-bool OrganizerCore::nexusLogin(bool retry)
+bool OrganizerCore::nexusApi(bool retry)
 {
   NXMAccessManager *accessManager
       = NexusInterface::instance(m_PluginContainer)->getAccessManager();
 
-  if ((accessManager->loginAttempted() || accessManager->loggedIn())
+  if ((accessManager->validateAttempted() || accessManager->validated())
       && !retry) {
     // previous attempt, maybe even successful
     return false;
   } else {
-    QString username, password;
-    if ((!retry && m_Settings.getNexusLogin(username, password))
-        || (m_AskForNexusPW && queryLogin(username, password))) {
+    QString apiKey;
+    if (!retry && m_Settings.getNexusApiKey(apiKey)) {
       // credentials stored or user entered them manually
-      qDebug("attempt login with username %s", qPrintable(username));
-      accessManager->login(username, password);
+      qDebug("attempt to verify nexus api key");
+      accessManager->apiCheck(apiKey);
       return true;
     } else {
       // no credentials stored and user didn't enter them
-      accessManager->refuseLogin();
+      accessManager->refuseValidation();
       return false;
     }
   }
 }
 
-bool OrganizerCore::queryLogin(QString &username, QString &password)
-{
-  CredentialsDialog dialog(qApp->activeWindow());
-  int res = dialog.exec();
-  if (dialog.neverAsk()) {
-    m_AskForNexusPW = false;
-  }
-  if (res == QDialog::Accepted) {
-    username = dialog.username();
-    password = dialog.password();
-    if (dialog.store()) {
-      m_Settings.setNexusLogin(username, password);
-    }
-    return true;
-  } else {
-    return false;
-  }
-}
-
 void OrganizerCore::startMOUpdate()
 {
-  if (nexusLogin()) {
+  if (nexusApi()) {
     m_PostLoginTasks.append([&]() { m_Updater.startUpdate(); });
   } else {
     m_Updater.startUpdate();
@@ -678,7 +654,7 @@ void OrganizerCore::startMOUpdate()
 void OrganizerCore::downloadRequestedNXM(const QString &url)
 {
   qDebug("download requested: %s", qPrintable(url));
-  if (nexusLogin()) {
+  if (nexusApi()) {
     m_PendingDownloads.append(url);
   } else {
     m_DownloadManager.addNXMDownload(url);
@@ -2026,7 +2002,7 @@ void OrganizerCore::loginFailed(const QString &message)
   if (QMessageBox::question(qApp->activeWindow(), tr("Login failed"),
                             tr("Login failed, try again?"))
       == QMessageBox::Yes) {
-    if (nexusLogin(true)) {
+    if (nexusApi(true)) {
       return;
     }
   }

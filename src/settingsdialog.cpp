@@ -29,10 +29,15 @@ along with Mod Organizer.  If not, see <http://www.gnu.org/licenses/>.
 #include "nexusinterface.h"
 #include "plugincontainer.h"
 
+#include <boost/uuid/uuid_generators.hpp>
+#include <boost/uuid/uuid_io.hpp>
+
 #include <QDirIterator>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QShortcut>
+#include <QJsonDocument>
+#include <QDesktopServices>
 
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -45,12 +50,16 @@ SettingsDialog::SettingsDialog(PluginContainer *pluginContainer, QWidget *parent
   : TutorableDialog("SettingsDialog", parent)
   , ui(new Ui::SettingsDialog)
   , m_PluginContainer(pluginContainer)
+  , m_nexusLogin(new QWebSocket)
 {
   ui->setupUi(this);
 
   QShortcut *delShortcut
       = new QShortcut(QKeySequence(Qt::Key_Delete), ui->pluginBlacklist);
   connect(delShortcut, SIGNAL(activated()), this, SLOT(deleteBlacklistItem()));
+  connect(m_nexusLogin, SIGNAL(connected()), this, SLOT(dispatchLogin()));
+  connect(m_nexusLogin, SIGNAL(textMessageReceived(const QString &)), this, SLOT(receiveApiKey(const QString &)));
+  connect(m_nexusLogin, SIGNAL(disconnected()), this, SLOT(completeApiConnection()));
 }
 
 SettingsDialog::~SettingsDialog()
@@ -184,6 +193,39 @@ void SettingsDialog::on_resetDialogsButton_clicked()
           QMessageBox::Yes | QMessageBox::No) == QMessageBox::Yes) {
     emit resetDialogs();
   }
+}
+
+void SettingsDialog::on_nexusConnect_clicked()
+{
+  ui->nexusConnect->setText("Connecting the API...");
+  ui->nexusConnect->setDisabled(true);
+  QUrl url = QUrl("wss://sso.nexusmods.com:8443");
+  m_nexusLogin->open(url);
+}
+
+void SettingsDialog::dispatchLogin()
+{
+  QJsonObject login;
+  boost::uuids::random_generator generator;
+  boost::uuids::uuid sessionId = generator();
+  login.insert(QString("id"), QJsonValue(QString(boost::uuids::to_string(sessionId).c_str())));
+  login.insert(QString("appid"), QJsonValue(QString("MO2")));
+  QJsonDocument loginDoc(login);
+  QString finalMessage(loginDoc.toJson());
+  m_nexusLogin->sendTextMessage(finalMessage);
+  QDesktopServices::openUrl(QUrl(QString("https://www.nexusmods.com/sso?id=") + QString(boost::uuids::to_string(sessionId).c_str())));
+}
+
+void SettingsDialog::receiveApiKey(const QString &apiKey)
+{
+  emit processApiKey(apiKey);
+  m_nexusLogin->close();
+  ui->nexusConnect->setText("Nexus API Key Stored");
+}
+
+void SettingsDialog::completeApiConnection()
+{
+  emit closeApiConnection(ui->nexusConnect);
 }
 
 void SettingsDialog::storeSettings(QListWidgetItem *pluginItem)
