@@ -414,7 +414,7 @@ void Profile::refreshModStatus()
         if ((modIndex < m_ModStatus.size())
             && (info->getFixedPriority() == INT_MIN)) {
           m_ModStatus[modIndex].m_Enabled = enabled;
-          if (m_ModStatus[modIndex].m_Priority == -1) {
+          if (m_ModStatus[modIndex].m_Priority == INT_MIN) {
             if (static_cast<size_t>(index) >= m_ModStatus.size()) {
               throw MyException(tr("invalid mod index: %1").arg(index));
             }
@@ -451,7 +451,7 @@ void Profile::refreshModStatus()
       continue;
     }
 
-    if (m_ModStatus[i].m_Priority != -1) {
+    if (m_ModStatus[i].m_Priority != INT_MIN) {
       m_ModStatus[i].m_Priority = numKnownMods - m_ModStatus[i].m_Priority - 1;
     } else {
       if (static_cast<size_t>(index) >= m_ModStatus.size()) {

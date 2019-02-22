@@ -362,7 +362,7 @@ private:
   class ModStatus {
     friend class Profile;
   public:
-    ModStatus() : m_Overwrite(false), m_Enabled(false), m_Priority(-1) {}
+    ModStatus() : m_Overwrite(false), m_Enabled(false), m_Priority(INT_MIN) {}
   private:
     bool m_Overwrite;
     bool m_Enabled;
